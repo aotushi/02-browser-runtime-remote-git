@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Target URL or domain to check.
+        description: Optional single target URL or domain. Leave empty to use target_file.
         required: false
-        default: https://example.com
+        default: ""
+      target_file:
+        description: Target file to run when target is empty.
+        required: false
+        default: targets.json
   schedule:
     - cron: "17 3 * * *"
 
@@ -40,8 +44,12 @@ jobs:
         run: npm run build
 
       - name: Run manual target
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.target != ''
         run: npm run start -- --wait-ms 3000 "${{ inputs.target }}"
+
+      - name: Run manual target file
+        if: github.event_name == 'workflow_dispatch' && inputs.target == ''
+        run: npm run start -- --target-file "${{ inputs.target_file }}"
 
       - name: Run scheduled targets
         if: github.event_name == 'schedule'

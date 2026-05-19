@@ -45,6 +45,8 @@ npm run start -- https://example.com
 
 定时任务读取仓库根目录下的 `targets.json`，避免把目标列表写死在 workflow YAML 中。
 
+workflow YAML 不再内置任何默认目标 URL。`workflow_dispatch` 的 `target` 默认为空，`target_file` 默认为 `targets.json`。
+
 当前支持两种写法：
 
 ```json
@@ -78,8 +80,10 @@ npm run start -- --target-file targets.json
 
 推到 GitHub 后：
 
-- 在 Actions 页面手动运行 `Site 10-Layer Check Browser`，可以输入单个目标 URL。
-- 定时任务每天运行一次内置目标列表。
+- 在 Actions 页面手动运行 `Site 10-Layer Check Browser`。
+- 手动运行时如果不填写 `target`，默认读取 `targets.json`。
+- 手动运行时如果填写 `target`，只跑这个临时单目标。
+- 定时任务每天读取 `targets.json`。
 - 运行结束后在 artifacts 下载 `reports/`、`snapshots/`、`screenshots/`。
 
 ## 当前 workflow
@@ -99,7 +103,7 @@ workflow_dispatch / schedule
 → npm ci
 → npx playwright install --with-deps chromium
 → npm run build
-→ npm run start -- <target> 或 npm run start -- --target-file targets.json
+→ npm run start -- <target> 或 npm run start -- --target-file <target_file>
 → upload reports / snapshots / screenshots
 ```
 
