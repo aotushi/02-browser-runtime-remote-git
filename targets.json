@@ -1,0 +1,10 @@
+[
+  {
+    "url": "https://example.com",
+    "wait_ms": 1000
+  },
+  {
+    "url": "https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/",
+    "wait_ms": 3000
+  }
+]
