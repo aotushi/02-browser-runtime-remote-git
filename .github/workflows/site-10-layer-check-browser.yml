@@ -1,0 +1,70 @@
+name: Site 10-Layer Check Browser
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target URL or domain to check.
+        required: false
+        default: https://example.com
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-runtime:
+    name: Browser runtime check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Run manual target
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run start -- --wait-ms 3000 "${{ inputs.target }}"
+
+      - name: Run scheduled targets
+        if: github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+
+          targets=(
+            "https://example.com"
+            "https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/"
+          )
+
+          for target in "${targets[@]}"; do
+            npm run start -- --wait-ms 3000 "$target"
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-10-layer-check-browser-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            reports
+            snapshots
+            screenshots
