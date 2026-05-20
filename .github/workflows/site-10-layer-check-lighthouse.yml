@@ -1,0 +1,71 @@
+name: Site 10-Layer Check Lighthouse
+
+run-name: Lighthouse ${{ inputs.target }} (${{ inputs.request_id || github.run_id }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target URL or domain to inspect.
+        required: true
+        default: https://example.com
+      strategy:
+        description: Lighthouse strategy.
+        required: false
+        default: mobile
+        type: choice
+        options:
+          - mobile
+          - desktop
+      request_id:
+        description: Worker request id used to correlate runs and artifacts.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse performance check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Build provider package
+        run: npm run build
+
+      - name: Run Lighthouse probe
+        run: |
+          REQUEST_ID="${{ inputs.request_id }}"
+          if [ -z "$REQUEST_ID" ]; then REQUEST_ID="${{ github.run_id }}"; fi
+          SAFE_TARGET=$(node -e "const u=new URL(process.argv[1].startsWith('http')?process.argv[1]:'https://'+process.argv[1]); console.log(u.hostname.toLowerCase())" "${{ inputs.target }}")
+          STRATEGY="${{ inputs.strategy }}"
+          npm run probe:lighthouse -- "${{ inputs.target }}" --strategy "$STRATEGY" --out "snapshots/${SAFE_TARGET}-lighthouse-${STRATEGY}-${REQUEST_ID}.json" --report "reports/${SAFE_TARGET}-lighthouse-${STRATEGY}-${REQUEST_ID}.md"
+
+      - name: Upload Lighthouse artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-10-layer-check-lighthouse-${{ inputs.request_id || github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            reports
+            snapshots

@@ -11,9 +11,11 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli.js",
     "dev": "npm run build && node dist/cli.js",
-    "probe:tls": "node tools/live-tls-probe.mjs"
+    "probe:tls": "node tools/live-tls-probe.mjs",
+    "probe:lighthouse": "node tools/lighthouse-probe.mjs"
   },
   "dependencies": {
+    "lighthouse": "^13.3.0",
     "playwright": "^1.53.0"
   },
   "devDependencies": {

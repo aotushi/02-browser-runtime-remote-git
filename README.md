@@ -4,12 +4,13 @@
 
 它不再只代表 browser runtime。当前职责是承载 Web App 不能直接在浏览器或 Cloudflare Worker 中完成的远程探针，并把报告、快照和截图作为 artifacts 交付。
 
-当前已包含两类 provider：
+当前已包含三类 provider：
 
 | Provider | Workflow | 输出 |
 | --- | --- | --- |
 | Browser runtime | `.github/workflows/site-10-layer-check-browser.yml` | `browser_page_probe` snapshots、Markdown reports、screenshots |
 | Live TLS certificate | `.github/workflows/site-10-layer-check-live-tls.yml` | `tls_live_certificate_probe` snapshots、Markdown reports |
+| Lighthouse performance | `.github/workflows/site-10-layer-check-lighthouse.yml` | `performance_probe` snapshots、Markdown reports |
 
 ## 为什么单独成目录
 
@@ -20,12 +21,14 @@
 ├── .github/
 │   └── workflows/
 │       ├── site-10-layer-check-browser.yml
-│       └── site-10-layer-check-live-tls.yml
+│       ├── site-10-layer-check-live-tls.yml
+│       └── site-10-layer-check-lighthouse.yml
 ├── package.json
 ├── package-lock.json
 ├── tsconfig.json
 ├── tools/
-│   └── live-tls-probe.mjs
+│   ├── live-tls-probe.mjs
+│   └── lighthouse-probe.mjs
 └── src/
 ```
 
@@ -40,6 +43,7 @@ npm run build
 npm run start -- https://example.com
 npm run start -- --target-file targets.json
 npm run probe:tls -- https://example.com
+npm run probe:lighthouse -- https://example.com --strategy mobile
 ```
 
 当前已本地验证：
@@ -51,6 +55,7 @@ npm run check
 npm run build
 npm run start -- https://example.com
 npm run probe:tls -- https://example.com --out snapshots/example.com-live-tls-local.json --report reports/example.com-live-tls-local.md
+npm run probe:lighthouse -- https://example.com --strategy mobile --out snapshots/example.com-lighthouse-local.json --report reports/example.com-lighthouse-local.md
 ```
 
 ## 目标配置
@@ -137,6 +142,40 @@ workflow_dispatch
 → upload reports / snapshots
 ```
 
+Lighthouse workflow：
+
+```text
+.github/workflows/site-10-layer-check-lighthouse.yml
+```
+
+流程：
+
+```text
+workflow_dispatch
+→ checkout
+→ setup-node
+→ npm ci
+→ npx playwright install --with-deps chromium
+→ npm run build
+→ npm run probe:lighthouse -- <target> --strategy <mobile|desktop>
+→ upload reports / snapshots
+```
+
+Lighthouse 的作用是补齐 Layer 5 访问性能的实验室测量：
+
+| 字段 | 来源 |
+| --- | --- |
+| performance score | Lighthouse performance category |
+| FCP / LCP / TBT / CLS / Speed Index | Lighthouse audits |
+| opportunities | Lighthouse opportunity audits |
+| strategy | workflow input `mobile` / `desktop` |
+
+仍未覆盖：
+
+- CrUX / field Core Web Vitals
+- WebPageTest 多地区/多浏览器测量
+- 真实用户监控数据
+
 Live TLS 的作用是补齐 Cloudflare Worker Fetch 无法提供的 Layer 2 live certificate 信息：
 
 | 字段 | 来源 |
@@ -190,4 +229,4 @@ D:\Users\shiihs_new\Downloads\site-10-layer-check-browser-26074354642
 - 不接 Browserless / Browserbase / Cloudflare Browser Run。
 - 定时目标列表来自 `targets.json`。
 - Browser runtime 核心实现变化仍需要从 `../02-browser-runtime` 同步过来。
-- Live TLS provider 是当前目录下的独立 Node probe，用于产出 Web App 可导入的 `SnapshotRecord` artifact。
+- Live TLS 和 Lighthouse provider 是当前目录下的独立 Node probe，用于产出 Web App 可导入的 `SnapshotRecord` artifact。
