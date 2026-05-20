@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli.js",
-    "dev": "npm run build && node dist/cli.js"
+    "dev": "npm run build && node dist/cli.js",
+    "probe:tls": "node tools/live-tls-probe.mjs"
   },
   "dependencies": {
     "playwright": "^1.53.0"

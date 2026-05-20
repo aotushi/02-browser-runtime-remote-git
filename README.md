@@ -1,8 +1,15 @@
-# Site 10-Layer Check Browser Runtime Remote GitHub
+# Site 10-Layer Check GitHub Actions Remote Provider
 
-这是 `../02-browser-runtime` 的远程 GitHub Actions 验证仓库版本。
+这是 Site 10-Layer Check 的 GitHub Actions remote provider 仓库版本。
 
-目标不是新增探针能力，而是验证同一套 Playwright browser runtime 能否在 GitHub-hosted runner 中无人值守运行，并把报告、快照和截图作为 artifacts 交付。
+它不再只代表 browser runtime。当前职责是承载 Web App 不能直接在浏览器或 Cloudflare Worker 中完成的远程探针，并把报告、快照和截图作为 artifacts 交付。
+
+当前已包含两类 provider：
+
+| Provider | Workflow | 输出 |
+| --- | --- | --- |
+| Browser runtime | `.github/workflows/site-10-layer-check-browser.yml` | `browser_page_probe` snapshots、Markdown reports、screenshots |
+| Live TLS certificate | `.github/workflows/site-10-layer-check-live-tls.yml` | `tls_live_certificate_probe` snapshots、Markdown reports |
 
 ## 为什么单独成目录
 
@@ -12,10 +19,13 @@
 02-browser-runtime-remote-github/
 ├── .github/
 │   └── workflows/
-│       └── site-10-layer-check-browser.yml
+│       ├── site-10-layer-check-browser.yml
+│       └── site-10-layer-check-live-tls.yml
 ├── package.json
 ├── package-lock.json
 ├── tsconfig.json
+├── tools/
+│   └── live-tls-probe.mjs
 └── src/
 ```
 
@@ -29,6 +39,7 @@ npx playwright install chromium
 npm run build
 npm run start -- https://example.com
 npm run start -- --target-file targets.json
+npm run probe:tls -- https://example.com
 ```
 
 当前已本地验证：
@@ -39,6 +50,7 @@ npx playwright install chromium
 npm run check
 npm run build
 npm run start -- https://example.com
+npm run probe:tls -- https://example.com --out snapshots/example.com-live-tls-local.json --report reports/example.com-live-tls-local.md
 ```
 
 ## 目标配置
@@ -88,7 +100,7 @@ npm run start -- --target-file targets.json
 
 ## 当前 workflow
 
-文件：
+Browser runtime workflow：
 
 ```text
 .github/workflows/site-10-layer-check-browser.yml
@@ -106,6 +118,40 @@ workflow_dispatch / schedule
 → npm run start -- <target> 或 npm run start -- --target-file <target_file>
 → upload reports / snapshots / screenshots
 ```
+
+Live TLS workflow：
+
+```text
+.github/workflows/site-10-layer-check-live-tls.yml
+```
+
+流程：
+
+```text
+workflow_dispatch
+→ checkout
+→ setup-node
+→ npm ci
+→ npm run build
+→ npm run probe:tls -- <target>
+→ upload reports / snapshots
+```
+
+Live TLS 的作用是补齐 Cloudflare Worker Fetch 无法提供的 Layer 2 live certificate 信息：
+
+| 字段 | 来源 |
+| --- | --- |
+| SAN | Node TLS socket `subjectaltname` |
+| issuer / subject | Node TLS peer certificate |
+| valid_from / valid_to | Node TLS peer certificate |
+| certificate chain | Node TLS peer certificate chain |
+| negotiated protocol / cipher | Node TLS socket |
+
+仍未覆盖：
+
+- OCSP / revocation status
+- multi-region certificate variance
+- browser-specific trust store differences
 
 ## 远程验证记录
 
@@ -143,4 +189,5 @@ D:\Users\shiihs_new\Downloads\site-10-layer-check-browser-26074354642
 - 不自动 commit 报告到仓库。
 - 不接 Browserless / Browserbase / Cloudflare Browser Run。
 - 定时目标列表来自 `targets.json`。
-- 这个目录是远程运行实验副本，核心实现变化需要从 `../02-browser-runtime` 同步过来。
+- Browser runtime 核心实现变化仍需要从 `../02-browser-runtime` 同步过来。
+- Live TLS provider 是当前目录下的独立 Node probe，用于产出 Web App 可导入的 `SnapshotRecord` artifact。

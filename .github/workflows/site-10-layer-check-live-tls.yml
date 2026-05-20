@@ -1,0 +1,49 @@
+name: Site 10-Layer Check Live TLS
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target URL or domain to inspect.
+        required: true
+        default: https://example.com
+
+permissions:
+  contents: read
+
+jobs:
+  live-tls:
+    name: Live TLS certificate check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build browser runtime package
+        run: npm run build
+
+      - name: Run live TLS probe
+        run: npm run probe:tls -- "${{ inputs.target }}"
+
+      - name: Upload live TLS artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-10-layer-check-live-tls-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            reports
+            snapshots
