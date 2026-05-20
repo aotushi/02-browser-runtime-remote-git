@@ -1,5 +1,7 @@
 name: Site 10-Layer Check Live TLS
 
+run-name: Live TLS ${{ inputs.target }} (${{ inputs.request_id || github.run_id }})
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,6 +9,10 @@ on:
         description: Target URL or domain to inspect.
         required: true
         default: https://example.com
+      request_id:
+        description: Worker request id used to correlate runs and artifacts.
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -35,13 +41,17 @@ jobs:
         run: npm run build
 
       - name: Run live TLS probe
-        run: npm run probe:tls -- "${{ inputs.target }}"
+        run: |
+          REQUEST_ID="${{ inputs.request_id }}"
+          if [ -z "$REQUEST_ID" ]; then REQUEST_ID="${{ github.run_id }}"; fi
+          SAFE_TARGET=$(node -e "const u=new URL(process.argv[1].startsWith('http')?process.argv[1]:'https://'+process.argv[1]); console.log(u.hostname.toLowerCase())" "${{ inputs.target }}")
+          npm run probe:tls -- "${{ inputs.target }}" --out "snapshots/${SAFE_TARGET}-live-tls-${REQUEST_ID}.json" --report "reports/${SAFE_TARGET}-live-tls-${REQUEST_ID}.md"
 
       - name: Upload live TLS artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: site-10-layer-check-live-tls-${{ github.run_id }}
+          name: site-10-layer-check-live-tls-${{ inputs.request_id || github.run_id }}
           if-no-files-found: error
           retention-days: 14
           path: |
