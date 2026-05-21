@@ -1,4 +1,5 @@
 name: Site 10-Layer Check Browser
+run-name: Browser runtime ${{ inputs.target || inputs.target_file || 'scheduled targets' }} ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -11,6 +12,14 @@ on:
         description: Target file to run when target is empty.
         required: false
         default: targets.json
+      provider:
+        description: Browser runtime provider id to stamp into output artifacts.
+        required: false
+        default: github-actions-browser
+      request_id:
+        description: Worker request id used to correlate status/result polling.
+        required: false
+        default: ""
   schedule:
     - cron: "17 3 * * *"
 
@@ -45,15 +54,15 @@ jobs:
 
       - name: Run manual target
         if: github.event_name == 'workflow_dispatch' && inputs.target != ''
-        run: npm run start -- --wait-ms 3000 "${{ inputs.target }}"
+        run: npm run start -- --provider "${{ inputs.provider }}" --wait-ms 3000 "${{ inputs.target }}"
 
       - name: Run manual target file
         if: github.event_name == 'workflow_dispatch' && inputs.target == ''
-        run: npm run start -- --target-file "${{ inputs.target_file }}"
+        run: npm run start -- --provider "${{ inputs.provider }}" --target-file "${{ inputs.target_file }}"
 
       - name: Run scheduled targets
         if: github.event_name == 'schedule'
-        run: npm run start -- --target-file targets.json
+        run: npm run start -- --provider github-actions-browser --target-file targets.json
 
       - name: Upload reports
         if: always()

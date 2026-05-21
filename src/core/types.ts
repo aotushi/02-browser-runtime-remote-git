@@ -91,6 +91,48 @@ export type ResourceSummary = {
   other: number;
 };
 
+export type BrowserResourceTimingSource =
+  | "performance_resource_timing"
+  | "performance_navigation_timing"
+  | "playwright_response"
+  | "not_available";
+
+export type BrowserPageResource = {
+  request_id: string;
+  url: string;
+  method: string;
+  resource_type: string;
+  status_code: number | null;
+  failure: string | null;
+  domain: string | null;
+  same_origin: boolean | null;
+  content_type: string | null;
+  cache_control: string | null;
+  cdn_headers: Record<string, string>;
+  transfer_size: number | null;
+  encoded_body_size: number | null;
+  decoded_body_size: number | null;
+  duration_ms: number | null;
+  start_time_ms: number | null;
+  timing_source: BrowserResourceTimingSource;
+};
+
+export type BrowserConsoleMessage = {
+  type: string;
+  text: string;
+  location: string | null;
+};
+
+export type BrowserRuntimeSecurity = {
+  mixed_content_candidates: Array<{
+    url: string;
+    resource_type: string;
+    reason: string;
+  }>;
+  failed_request_count: number;
+  console_error_count: number;
+};
+
 export type BrowserPageSnapshot = {
   final_url: string;
   status_code: number | null;
@@ -98,13 +140,10 @@ export type BrowserPageSnapshot = {
   html_bytes: number;
   visible_text_bytes: number;
   resource_counts: ResourceSummary;
-  resources: Array<{
-    url: string;
-    method: string;
-    resource_type: string;
-    status_code: number | null;
-    failure: string | null;
-  }>;
+  resources: BrowserPageResource[];
+  console_messages: BrowserConsoleMessage[];
+  page_errors: string[];
+  runtime_security: BrowserRuntimeSecurity;
   screenshot_path: string | null;
   access_barrier: {
     detected: boolean;

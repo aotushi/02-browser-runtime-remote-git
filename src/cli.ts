@@ -7,15 +7,19 @@ import type { BrowserOptions, ProbeCapability, ProbeContext, ProbePlugin, ProbeR
 import { browserPageProbe } from "./probes/browser-page.js";
 import { renderMarkdownReport } from "./reporters/markdown.js";
 
+type BrowserRuntimeProviderId = "playwright-local" | "github-actions-browser";
+
 type CliOptions = {
   target?: string;
   targetFile?: string;
+  providerName: BrowserRuntimeProviderId;
   help: boolean;
   browserOptions: BrowserOptions;
 };
 
 type TargetRun = {
   target: string;
+  providerName: BrowserRuntimeProviderId;
   browserOptions: BrowserOptions;
 };
 
@@ -30,6 +34,7 @@ type TargetFileEntry =
       timeoutMs?: unknown;
       screenshot?: unknown;
       headed?: unknown;
+      provider?: unknown;
     };
 
 const probes = [browserPageProbe];
@@ -56,10 +61,10 @@ async function main() {
   await mkdir(reportsDir, { recursive: true });
 
   console.log(`Targets: ${targetRuns.length}`);
-  console.log("Provider: playwright-local");
+  console.log(`Provider: ${options.providerName}`);
 
   for (const targetRun of targetRuns) {
-    const result = await runBrowserProbeEngine(targetRun.target, targetRun.browserOptions);
+    const result = await runBrowserProbeEngine(targetRun.target, targetRun.providerName, targetRun.browserOptions);
     const output = await writeRunOutputs(result, snapshotsDir, reportsDir);
 
     console.log("");
@@ -89,13 +94,14 @@ async function resolveTargetRuns(options: CliOptions): Promise<TargetRun[]> {
   }
 
   if (options.targetFile) {
-    return readTargetFile(options.targetFile, options.browserOptions);
+    return readTargetFile(options.targetFile, options.providerName, options.browserOptions);
   }
 
   if (options.target) {
     return [
       {
         target: options.target,
+        providerName: options.providerName,
         browserOptions: cloneBrowserOptions(options.browserOptions),
       },
     ];
@@ -104,7 +110,11 @@ async function resolveTargetRuns(options: CliOptions): Promise<TargetRun[]> {
   return [];
 }
 
-async function readTargetFile(targetFile: string, defaultOptions: BrowserOptions): Promise<TargetRun[]> {
+async function readTargetFile(
+  targetFile: string,
+  defaultProviderName: BrowserRuntimeProviderId,
+  defaultOptions: BrowserOptions,
+): Promise<TargetRun[]> {
   const filePath = path.resolve(targetFile);
   const raw = await readFile(filePath, "utf-8");
   const parsed = JSON.parse(raw) as unknown;
@@ -118,13 +128,19 @@ async function readTargetFile(targetFile: string, defaultOptions: BrowserOptions
     throw new Error("--target-file must contain a JSON array or an object with a targets array.");
   }
 
-  return entries.map((entry, index) => parseTargetFileEntry(entry as TargetFileEntry, index, defaultOptions));
+  return entries.map((entry, index) => parseTargetFileEntry(entry as TargetFileEntry, index, defaultProviderName, defaultOptions));
 }
 
-function parseTargetFileEntry(entry: TargetFileEntry, index: number, defaultOptions: BrowserOptions): TargetRun {
+function parseTargetFileEntry(
+  entry: TargetFileEntry,
+  index: number,
+  defaultProviderName: BrowserRuntimeProviderId,
+  defaultOptions: BrowserOptions,
+): TargetRun {
   if (typeof entry === "string") {
     return {
       target: entry,
+      providerName: defaultProviderName,
       browserOptions: cloneBrowserOptions(defaultOptions),
     };
   }
@@ -140,6 +156,10 @@ function parseTargetFileEntry(entry: TargetFileEntry, index: number, defaultOpti
   }
 
   const browserOptions = cloneBrowserOptions(defaultOptions);
+  const providerName =
+    entry.provider === undefined
+      ? defaultProviderName
+      : parseProviderOption(`targets[${index}].provider`, String(entry.provider));
   const waitMs = entry.wait_ms ?? entry.waitMs;
   const timeoutMs = entry.timeout_ms ?? entry.timeoutMs;
 
@@ -165,10 +185,14 @@ function parseTargetFileEntry(entry: TargetFileEntry, index: number, defaultOpti
     browserOptions.headed = entry.headed;
   }
 
-  return { target, browserOptions };
+  return { target, providerName, browserOptions };
 }
 
-async function runBrowserProbeEngine(targetInput: string, browserOptions: BrowserOptions): Promise<ProbeRunResult> {
+async function runBrowserProbeEngine(
+  targetInput: string,
+  providerName: BrowserRuntimeProviderId,
+  browserOptions: BrowserOptions,
+): Promise<ProbeRunResult> {
   const target = normalizeTarget(targetInput);
   const snapshotAt = new Date().toISOString();
   const availableCapabilities = new Set(capabilities);
@@ -179,7 +203,7 @@ async function runBrowserProbeEngine(targetInput: string, browserOptions: Browse
     normalizedTarget: target.normalizedTarget,
     snapshotAt,
     availableCapabilities,
-    providerName: "playwright-local",
+    providerName,
     browserOptions,
   };
 
@@ -232,6 +256,7 @@ function createSkippedRecord(context: ProbeContext, probe: ProbePlugin, missingC
 function parseArgs(args: string[]): CliOptions {
   let target: string | undefined;
   let targetFile: string | undefined;
+  let providerName: BrowserRuntimeProviderId = "playwright-local";
   let help = false;
   const browserOptions: BrowserOptions = {
     headed: false,
@@ -287,6 +312,17 @@ function parseArgs(args: string[]): CliOptions {
       continue;
     }
 
+    if (arg === "--provider") {
+      providerName = parseProviderOption(arg, args[index + 1]);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--provider=")) {
+      providerName = parseProviderOption("--provider", arg.slice("--provider=".length));
+      continue;
+    }
+
     if (arg === "-h" || arg === "--help") {
       help = true;
       continue;
@@ -303,7 +339,7 @@ function parseArgs(args: string[]): CliOptions {
     target = arg;
   }
 
-  return { target, targetFile, help, browserOptions };
+  return { target, targetFile, providerName, help, browserOptions };
 }
 
 function parseRequiredStringOption(name: string, value: string | undefined): string {
@@ -329,6 +365,13 @@ function parsePositiveIntegerOption(name: string, value: string | undefined): nu
   return parsed;
 }
 
+function parseProviderOption(name: string, value: string | undefined): BrowserRuntimeProviderId {
+  if (value === "playwright-local" || value === "github-actions-browser") {
+    return value;
+  }
+  throw new Error(`${name} must be one of: playwright-local, github-actions-browser.`);
+}
+
 function cloneBrowserOptions(options: BrowserOptions): BrowserOptions {
   return { ...options };
 }
@@ -350,6 +393,7 @@ Examples:
 
 Options:
   --target-file <path>  Read targets from a JSON file
+  --provider <id>       Runtime provider metadata: playwright-local or github-actions-browser
   --headed              Show the browser window
   --wait-ms <ms>        Extra wait after network idle, default 1000
   --timeout-ms <ms>     Page navigation timeout, default 30000

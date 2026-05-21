@@ -41,6 +41,8 @@ npm ci
 npx playwright install chromium
 npm run build
 npm run start -- https://example.com
+npm run start -- --provider github-actions-browser --no-screenshot --wait-ms 0 https://example.net
+npm run check:runtime-enrichment -- snapshots/example.com-browser-YYYY-MM-DD.json
 npm run start -- --target-file targets.json
 npm run probe:tls -- https://example.com
 npm run probe:lighthouse -- https://example.com --strategy mobile
@@ -54,15 +56,45 @@ npx playwright install chromium
 npm run check
 npm run build
 npm run start -- https://example.com
+npm run check:provider-selection
+npm run start -- --provider github-actions-browser --no-screenshot --wait-ms 0 https://example.net
+npm run check:runtime-enrichment -- snapshots/example.com-browser-2026-05-21.json
 npm run probe:tls -- https://example.com --out snapshots/example.com-live-tls-local.json --report reports/example.com-live-tls-local.md
 npm run probe:lighthouse -- https://example.com --strategy mobile --out snapshots/example.com-lighthouse-local.json --report reports/example.com-lighthouse-local.md
 ```
+
+## Browser Runtime Enrichment
+
+The browser runtime artifact is the collection backend for runtime data that Cloudflare Worker fetch cannot observe.
+
+Current `browser_page_probe.value.resources[]` includes the original request fields plus enrichment fields:
+
+| Field group | Fields | Purpose |
+| --- | --- | --- |
+| Request identity | `request_id`, `url`, `method`, `resource_type`, `status_code`, `failure` | Preserve the runtime request list. |
+| Origin classification | `domain`, `same_origin` | Support third-party and API-surface analysis in the Web App. |
+| Response headers | `content_type`, `cache_control`, `cdn_headers` | Support asset-level cache, resource classification, and CDN/header signal evidence. |
+| Runtime size/timing | `transfer_size`, `encoded_body_size`, `decoded_body_size`, `duration_ms`, `start_time_ms`, `timing_source` | Support L4 resource weight and later performance analysis. |
+
+The artifact also includes:
+
+| Field | Purpose |
+| --- | --- |
+| `console_messages` | Runtime console warnings/errors captured during page load. |
+| `page_errors` | JavaScript page errors captured by Playwright. |
+| `runtime_security` | Summary of mixed-content candidates, failed requests, and console error count. |
+
+Important boundaries:
+
+- Browser timing sizes can be `null` because browser privacy, caching, or Timing-Allow-Origin can hide values.
+- GitHub Actions runtime data represents the runner network and browser, not the user's local environment.
+- The Web App still needs to derive L4/L6/L10 records from this enriched artifact; the provider artifact alone is not final layer coverage.
 
 ## 目标配置
 
 定时任务读取仓库根目录下的 `targets.json`，避免把目标列表写死在 workflow YAML 中。
 
-workflow YAML 不再内置任何默认目标 URL。`workflow_dispatch` 的 `target` 默认为空，`target_file` 默认为 `targets.json`。
+workflow YAML 不再内置任何默认目标 URL。`workflow_dispatch` 的 `target` 默认为空，`target_file` 默认为 `targets.json`，`provider` 默认为 `github-actions-browser`。
 
 当前支持两种写法：
 
@@ -71,6 +103,7 @@ workflow YAML 不再内置任何默认目标 URL。`workflow_dispatch` 的 `targ
   "https://example.com",
   {
     "url": "https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/",
+    "provider": "github-actions-browser",
     "wait_ms": 3000,
     "timeout_ms": 30000,
     "screenshot": true
@@ -87,11 +120,13 @@ workflow YAML 不再内置任何默认目标 URL。`workflow_dispatch` 的 `targ
 | `timeout_ms` / `timeoutMs` | 页面打开超时 |
 | `screenshot` | 是否保存截图 |
 | `headed` | 本地调试时是否显示浏览器窗口 |
+| `provider` | 可选 Provider 标识；支持 `playwright-local`、`github-actions-browser`，会写入 `source` 和 `browser.provider` |
 
 CLI 仍然兼容单目标运行：
 
 ```bash
 npm run start -- https://example.com
+npm run start -- --provider github-actions-browser https://example.com
 npm run start -- --target-file targets.json
 ```
 

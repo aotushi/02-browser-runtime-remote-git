@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "check:runtime-enrichment": "node tools/assert-browser-runtime-enrichment.mjs",
+    "check:provider-selection": "npm run build && node tools/assert-provider-selection.mjs",
     "start": "node dist/cli.js",
     "dev": "npm run build && node dist/cli.js",
     "probe:tls": "node tools/live-tls-probe.mjs",
